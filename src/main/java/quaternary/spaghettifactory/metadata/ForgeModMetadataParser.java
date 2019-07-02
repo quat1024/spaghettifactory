@@ -14,12 +14,14 @@ import net.fabricmc.loader.api.metadata.Person;
 import net.fabricmc.loader.metadata.EntrypointMetadata;
 import net.fabricmc.loader.metadata.LoaderModMetadata;
 import net.fabricmc.loader.metadata.NestedJarEntry;
+import net.minecraft.util.SystemUtil;
 import quaternary.spaghettifactory.Util;
 
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,7 +35,7 @@ public class ForgeModMetadataParser {
 		Toml toml = new Toml().read(in);
 		
 		//global stuff
-		@Nullable String issueUrl = loader.getModContainer("spaghettifactory").flatMap(c -> c.getMetadata().getContact().get("issues")).orElse(null);
+		String issueUrl = "https://github.com/quat1024/spaghettifactory/issues"; //;)
 		
 		//mods table
 		if(Optional.ofNullable(toml.getTables("mods")).orElse(Collections.emptyList()).size() != 1) {
@@ -71,10 +73,10 @@ public class ForgeModMetadataParser {
 				})
 				.collect(Collectors.toList());
 		
-		Map<String, String> contactMap = ImmutableMap.of(
-			"homepage", homepage,
-			"issues", issueUrl
-		);
+		Map<String, String> contactMap = SystemUtil.consume(new HashMap<>(), (m) -> {
+			m.put("issues", issueUrl);
+			if(homepage != null) m.put("homepage", homepage);
+		});
 		
 		ContactInformation contactInfo = new ContactInformation() {
 			@Override
@@ -87,6 +89,14 @@ public class ForgeModMetadataParser {
 				return contactMap;
 			}
 		};
+		
+		//cuz it needs to be final wew
+		String description2;
+		if(description.trim().isEmpty()) {
+			description2 = "A Forge mod loaded through Spaghetti Factory. It has no description. So here is one.";
+		} else {
+			description2 = "Forge mod: " + description;
+		}
 		
 		return new LoaderModMetadata[]{ new LoaderModMetadata() {
 			@Override
@@ -180,7 +190,7 @@ public class ForgeModMetadataParser {
 			
 			@Override
 			public String getDescription() {
-				return description;
+				return description2;
 			}
 			
 			@Override

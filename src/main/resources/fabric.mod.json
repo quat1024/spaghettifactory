@@ -9,8 +9,9 @@
     "quaternary"
   ],
   "contact": {
-    "homepage": "",
-    "sources": ""
+    "homepage": "https://github.com/quat1024/spaghettifactory",
+    "sources": "https://github.com/quat1024/spaghettifactory",
+    "issues": "https://github.com/quat1024/spaghettifactory/issues"
   },
 
   "license": "MPL-2.0",
