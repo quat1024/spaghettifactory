@@ -1,4 +1,4 @@
-package quaternary.spaghettifactory.discovery;
+package quaternary.spaghettifactory;
 
 import net.fabricmc.loader.FabricLoader;
 import net.fabricmc.loader.discovery.ModCandidate;
@@ -13,7 +13,7 @@ import net.fabricmc.loader.util.UrlConversionException;
 import net.fabricmc.loader.util.UrlUtil;
 import quaternary.spaghettifactory.ReflectionHax;
 import quaternary.spaghettifactory.SpaghettiFactory;
-import quaternary.spaghettifactory.metadata.ForgeModMetadataParser;
+import quaternary.spaghettifactory.ForgeModMetadataParser;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -74,7 +74,8 @@ public class ForgeModResolver extends ModResolver {
 		Throwable exception = null;
 		try {
 			pool.shutdown();
-			pool.awaitTermination(30, TimeUnit.SECONDS);
+			//TODO set this back at 30... it just keeps timing out when debugging loll
+			pool.awaitTermination(300000, TimeUnit.SECONDS);
 			for (ForgeUrlProcessAction action : allActions) { ///new action
 				if (!action.isDone()) {
 					tookTooLong = true;
@@ -129,7 +130,7 @@ public class ForgeModResolver extends ModResolver {
 		
 		@Override
 		protected void compute() {
-			FileSystemUtil.FileSystemDelegate jarFs;
+			FileSystemUtil.FileSystemDelegate diskJarFs;
 			Path path, metaInfDir, modToml, rootDir;
 			URL normalizedUrl;
 			
@@ -144,29 +145,18 @@ public class ForgeModResolver extends ModResolver {
 			}
 			
 			if (Files.isDirectory(path)) {
+				//TODO...?
 				throw new IllegalArgumentException("Can't handle mods from directories right now: " + path);
-				/*
-				// Directory
-				modJson = path.resolve("fabric.mod.json");
-				rootDir = path;
-				
-				if (loader.isDevelopmentEnvironment() && !Files.exists(modJson)) {
-					SpaghettiFactory.LOGGER.warn("Adding directory " + path + " to mod classpath in development environment - workaround for Gradle splitting mods into two directories");
-					synchronized (launcherSyncObject) {
-						FabricLauncherBase.getLauncher().propose(url);
-					}
-				}
-				*/
 			} else {
 				// JAR file
 				try {
 					///grab the forge mods.toml file
-					jarFs = FileSystemUtil.getJarFileSystem(path, false);
-					metaInfDir = jarFs.get().getPath("META-INF");
+					diskJarFs = FileSystemUtil.getJarFileSystem(path, false);
+					metaInfDir = diskJarFs.get().getPath("META-INF");
 					modToml = metaInfDir.resolve("mods.toml");
 					//rootDir = jarFs.get().getRootDirectories().iterator().next();
 				} catch (IOException e) {
-					throw new RuntimeException("Failed to open mod Forge JAR at " + path + "!");
+					throw new RuntimeException("Failed to read Forge mods.toml for mod at " + path + "!");
 				}
 			}
 			
@@ -178,21 +168,31 @@ public class ForgeModResolver extends ModResolver {
 				throw new RuntimeException("Can't recognize the Forge mod at '" + path + "'", e);
 			}
 			
+			///new: copy the mod into jimfs
+			//this step takes care of transformation, too
+			URL jimfsNormalizedUrl;
+			try {
+				jimfsNormalizedUrl = UrlUtil.asUrl(ForgeModStager.stageMod(diskJarFs.get(), path));
+			} catch(Exception e) {
+				throw new RuntimeException("couldn't stage Forge mod at '" + path + "'", e);
+			}
+			
 			for (LoaderModMetadata i : info) {
-				ModCandidate candidate = new ModCandidate(i, normalizedUrl, depth);
+				ModCandidate candidate = new ModCandidate(i, jimfsNormalizedUrl, depth);
 				boolean added;
 				
 				if (candidate.getInfo().getId() == null || candidate.getInfo().getId().isEmpty()) {
 					throw new RuntimeException(String.format("Mod file `%s` has no id", candidate.getOriginUrl().getFile()));
 				}
 				
+				/*
 				if (!MOD_ID_PATTERN.matcher(candidate.getInfo().getId()).matches()) {
 					throw new RuntimeException(String.format("Mod id `%s` does not match the requirements", candidate.getInfo().getId()));
 				}
 				
 				if (candidate.getInfo().getSchemaVersion() < ModMetadataParser.LATEST_VERSION) {
 					SpaghettiFactory.LOGGER.warn("Mod ID " + candidate.getInfo().getId() + " uses outdated schema version: " + candidate.getInfo().getSchemaVersion() + " < " + ModMetadataParser.LATEST_VERSION);
-				}
+				}*/
 				
 				added = candidatesById.computeIfAbsent(candidate.getInfo().getId(), ModCandidateSet::new).add(candidate);
 				

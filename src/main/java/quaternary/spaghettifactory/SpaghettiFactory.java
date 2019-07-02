@@ -8,7 +8,6 @@ import net.fabricmc.loader.discovery.ModCandidate;
 import net.fabricmc.loader.discovery.ModResolutionException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import quaternary.spaghettifactory.discovery.ForgeModResolver;
 
 import java.io.File;
 import java.util.Map;
@@ -56,7 +55,7 @@ public class SpaghettiFactory implements ModInitializer {
 		}
 		
 		//Straight cut and paste from FabricLoader#load, basically. I like this log message.
-		LOGGER.info("[" + getClass().getSimpleName() + "] " + modText, candidateMap.values().size(), candidateMap.values().stream()
+		LOGGER.info(modText, candidateMap.values().size(), candidateMap.values().stream()
 			.map(info -> String.format("%s@%s", info.getInfo().getId(), info.getInfo().getVersion().getFriendlyString()))
 			.collect(Collectors.joining(", ")));
 		
@@ -84,5 +83,13 @@ public class SpaghettiFactory implements ModInitializer {
 	
 	public static File getForgeModsFile() {
 		return new File(FABRIC_LOADER.getGameDirectory(), "mods-sf-forge");
+	}
+	
+	public static void info(String msg, Object... args) {
+		LOGGER.info(msg, args);
+	}
+	
+	public static void debug(String msg, Object... args) {
+		LOGGER.debug(msg, args);
 	}
 }

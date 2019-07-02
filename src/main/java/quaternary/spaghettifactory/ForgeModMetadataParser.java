@@ -1,4 +1,4 @@
-package quaternary.spaghettifactory.metadata;
+package quaternary.spaghettifactory;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -93,7 +93,7 @@ public class ForgeModMetadataParser {
 		//cuz it needs to be final wew
 		String description2;
 		if(description.trim().isEmpty()) {
-			description2 = "A Forge mod loaded through Spaghetti Factory. It has no description. So here is one.";
+			description2 = "A Forge mod loaded through Spaghetti Factory.";
 		} else {
 			description2 = "Forge mod: " + description;
 		}
