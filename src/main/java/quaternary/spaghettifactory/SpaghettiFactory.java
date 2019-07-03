@@ -8,16 +8,13 @@ import net.fabricmc.loader.discovery.ModCandidate;
 import net.fabricmc.loader.discovery.ModResolutionException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import quaternary.spaghettifactory.map.JoinedTsrgHandler;
 import quaternary.spaghettifactory.map.Mappings;
+import quaternary.spaghettifactory.map.TsrgManager;
+import quaternary.spaghettifactory.stage.ForgeModResolver;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class SpaghettiFactory implements ModInitializer {
@@ -27,17 +24,16 @@ public class SpaghettiFactory implements ModInitializer {
 	
 	public static final Logger LOGGER = LogManager.getFormatterLogger("Spaghetti Factory");
 	
-	public static final File JOINED_TSRG_FILE = new File(FABRIC_LOADER.getGameDirectory(), "joined.tsrg").getAbsoluteFile();
-	
 	@Override
 	public void onInitialize() {
 		LOGGER.info("Hello world!");
-		LOGGER.info("Preparing mappings transformer...");
+		LOGGER.info("Preparing remapper...");
 		
-		try(InputStream joinedTsrgInput = JoinedTsrgHandler.getInputStream(FABRIC_LOADER)) {
-			Mappings.buildRemapper(joinedTsrgInput);
-		} catch(IOException e) {
-			throw new RuntimeException("hmm", e);
+		Path pathToJoinedTsrg = TsrgManager.pathToTsrg(FABRIC_LOADER);
+		try {
+			Mappings.buildRemapper(pathToJoinedTsrg);
+		} catch(Exception e) {
+			throw new RuntimeException("Cannot build remapper!", e);
 		}
 		
 		LOGGER.info("Discovering Forge mods...");

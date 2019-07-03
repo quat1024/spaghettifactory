@@ -1,4 +1,4 @@
-package quaternary.spaghettifactory;
+package quaternary.spaghettifactory.stage;
 
 import net.fabricmc.loader.FabricLoader;
 import net.fabricmc.loader.discovery.ModCandidate;
@@ -7,13 +7,11 @@ import net.fabricmc.loader.discovery.ModCandidateSet;
 import net.fabricmc.loader.discovery.ModResolutionException;
 import net.fabricmc.loader.discovery.ModResolver;
 import net.fabricmc.loader.metadata.LoaderModMetadata;
-import net.fabricmc.loader.metadata.ModMetadataParser;
 import net.fabricmc.loader.util.FileSystemUtil;
 import net.fabricmc.loader.util.UrlConversionException;
 import net.fabricmc.loader.util.UrlUtil;
 import quaternary.spaghettifactory.ReflectionHax;
 import quaternary.spaghettifactory.SpaghettiFactory;
-import quaternary.spaghettifactory.ForgeModMetadataParser;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -74,7 +72,7 @@ public class ForgeModResolver extends ModResolver {
 		Throwable exception = null;
 		try {
 			pool.shutdown();
-			//TODO set this back at 30... it just keeps timing out when debugging loll
+			//TODO NORELEASE set this back at 30... it just keeps timing out when debugging loll
 			pool.awaitTermination(300000, TimeUnit.SECONDS);
 			for (ForgeUrlProcessAction action : allActions) { ///new action
 				if (!action.isDone()) {
@@ -92,15 +90,15 @@ public class ForgeModResolver extends ModResolver {
 			}
 		} catch (InterruptedException e) {
 			/// different error message
-			throw new RuntimeException("Forge mod resolution took too long!", e);
+			throw new ModResolutionException("Forge mod resolution took too long!", e);
 		}
 		if (tookTooLong) {
 			/// different error message
-			throw new RuntimeException("Forge mod resolution took too long!");
+			throw new ModResolutionException("Forge mod resolution took too long!");
 		}
 		if (exception != null) {
 			/// different error message
-			throw new RuntimeException("Forge mod resolution failed!", exception);
+			throw new ModResolutionException("Forge mod resolution failed!", exception);
 		}
 		
 		long time2 = System.currentTimeMillis();             ///different logger
@@ -114,7 +112,6 @@ public class ForgeModResolver extends ModResolver {
 		return result;
 	}
 	
-	///Also a copypaste of the superclass's inner class basically.
 	static class ForgeUrlProcessAction extends RecursiveAction {
 		private final FabricLoader loader;
 		private final Map<String, ModCandidateSet> candidatesById;
@@ -130,124 +127,50 @@ public class ForgeModResolver extends ModResolver {
 		
 		@Override
 		protected void compute() {
-			FileSystemUtil.FileSystemDelegate diskJarFs;
-			Path path, metaInfDir, modToml, rootDir;
-			URL normalizedUrl;
-			
-			SpaghettiFactory.LOGGER.debug("Testing " + url);
+			FileSystemUtil.FileSystemDelegate jarFs;
+			Path jarPath;
 			
 			try {
-				path = UrlUtil.asPath(url).normalize();
-				// normalize URL (used as key for nested JAR lookup)
-				normalizedUrl = UrlUtil.asUrl(path);
-			} catch (UrlConversionException e) {
+				jarPath = UrlUtil.asPath(url).normalize();
+			} catch(UrlConversionException e) {
 				throw new RuntimeException("Failed to convert URL " + url + "!", e);
 			}
 			
-			if (Files.isDirectory(path)) {
+			if(Files.isDirectory(jarPath)) {
 				//TODO...?
-				throw new IllegalArgumentException("Can't handle mods from directories right now: " + path);
+				throw new IllegalArgumentException("Can't handle mods from directories right now: " + jarPath);
 			} else {
 				// JAR file
 				try {
 					///grab the forge mods.toml file
-					diskJarFs = FileSystemUtil.getJarFileSystem(path, false);
-					metaInfDir = diskJarFs.get().getPath("META-INF");
-					modToml = metaInfDir.resolve("mods.toml");
+					jarFs = FileSystemUtil.getJarFileSystem(jarPath, false);
 					//rootDir = jarFs.get().getRootDirectories().iterator().next();
-				} catch (IOException e) {
-					throw new RuntimeException("Failed to read Forge mods.toml for mod at " + path + "!");
+				} catch(IOException e) {
+					throw new RuntimeException("Failed to read Forge mods.toml for mod at " + jarPath + "!");
 				}
-			}
-			
-			LoaderModMetadata[] info;
-			
-			try (InputStream stream = Files.newInputStream(modToml)) {
-				info = ForgeModMetadataParser.getForgeMods(loader, stream);
-			} catch (Exception e) {
-				throw new RuntimeException("Can't recognize the Forge mod at '" + path + "'", e);
 			}
 			
 			///new: copy the mod into jimfs
 			//this step takes care of transformation, too
-			URL jimfsNormalizedUrl;
 			try {
-				jimfsNormalizedUrl = UrlUtil.asUrl(ForgeModStager.stageMod(diskJarFs.get(), path));
-			} catch(Exception e) {
-				throw new RuntimeException("couldn't stage Forge mod at '" + path + "'", e);
-			}
-			
-			for (LoaderModMetadata i : info) {
-				ModCandidate candidate = new ModCandidate(i, jimfsNormalizedUrl, depth);
+				StagedForgeMod staged = ForgeModStager.stageMod(jarFs.get(), jarPath);
+				ModCandidate candidate = new ModCandidate(staged.metadata, UrlUtil.asUrl(staged.pathToJar), depth);
 				boolean added;
 				
-				if (candidate.getInfo().getId() == null || candidate.getInfo().getId().isEmpty()) {
+				if(candidate.getInfo().getId() == null || candidate.getInfo().getId().isEmpty()) {
 					throw new RuntimeException(String.format("Mod file `%s` has no id", candidate.getOriginUrl().getFile()));
 				}
 				
-				/*
-				if (!MOD_ID_PATTERN.matcher(candidate.getInfo().getId()).matches()) {
-					throw new RuntimeException(String.format("Mod id `%s` does not match the requirements", candidate.getInfo().getId()));
-				}
-				
-				if (candidate.getInfo().getSchemaVersion() < ModMetadataParser.LATEST_VERSION) {
-					SpaghettiFactory.LOGGER.warn("Mod ID " + candidate.getInfo().getId() + " uses outdated schema version: " + candidate.getInfo().getSchemaVersion() + " < " + ModMetadataParser.LATEST_VERSION);
-				}*/
-				
 				added = candidatesById.computeIfAbsent(candidate.getInfo().getId(), ModCandidateSet::new).add(candidate);
 				
-				if (!added) {
+				if(!added) {
 					SpaghettiFactory.LOGGER.debug(candidate.getOriginUrl() + " already present as " + candidate);
 				} else {
 					SpaghettiFactory.LOGGER.debug("Adding " + candidate.getOriginUrl() + " as " + candidate);
-					
-					//Skip jij for now
-					/*
-					List<Path> jarInJars = inMemoryCache.computeIfAbsent(candidate.getOriginUrl(), (u) -> {
-						SpaghettiFactory.LOGGER.debug("Searching for nested JARs in " + candidate);
-						Collection<NestedJarEntry> jars = candidate.getInfo().getJars();
-						List<Path> list = new ArrayList<>(jars.size());
-						
-						jars.stream()
-							.map((j) -> rootDir.resolve(j.getFile().replace("/", rootDir.getFileSystem().getSeparator())))
-							.forEach((modPath) -> {
-								if (!Files.isDirectory(modPath) && modPath.toString().endsWith(".jar")) {
-									// TODO: pre-check the JAR before loading it, if possible
-									SpaghettiFactory.LOGGER.debug("Found nested JAR: " + modPath);
-									Path dest = inMemoryFs.getPath(UUID.randomUUID() + ".jar");
-									
-									try {
-										Files.copy(modPath, dest);
-									} catch (IOException e) {
-										throw new RuntimeException("Failed to load nested JAR " + modPath + " into memory (" + dest + ")!", e);
-									}
-									
-									list.add(dest);
-								}
-							});
-						
-						return list;
-					});
-					
-					if (!jarInJars.isEmpty()) {
-						invokeAll(
-							jarInJars.stream()
-								.map((p) -> {
-									try {
-										return new ForgeUrlProcessAction(loader, candidatesById, UrlUtil.asUrl(p.normalize()), depth + 1);
-									} catch (UrlConversionException e) {
-										throw new RuntimeException("Failed to turn path '" + p.normalize() + "' into URL!", e);
-									}
-								}).collect(Collectors.toList())
-						);
-					}
-					*/
 				}
+			} catch(Exception e) {
+				throw new RuntimeException("couldn't stage Forge mod at '" + jarPath + "'", e);
 			}
-
-			/* if (jarFs != null) {
-				jarFs.close();
-			} */
 		}
 	}
 }

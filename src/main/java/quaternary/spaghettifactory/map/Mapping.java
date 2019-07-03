@@ -1,5 +1,6 @@
 package quaternary.spaghettifactory.map;
 
+import com.google.common.base.Preconditions;
 import net.fabricmc.mappings.EntryTriple;
 import org.objectweb.asm.commons.Remapper;
 
@@ -30,7 +31,7 @@ public class Mapping<SRC extends Namespace, DST extends Namespace> {
 		return new Mapping<>(classMapper.memoized(), methodMapper.memoized(), fieldMapper.memoized());
 	}
 	
-	private static final Bijection<String, String> FROM_INTERNAL_NAME = Bijection.of(s -> s.replace('/', '.'), s -> s.replace('.', '/'));
+	public static final Bijection<String, String> FROM_INTERNAL_NAME = Bijection.of(s -> s.replace('/', '.'), s -> s.replace('.', '/'));
 	
 	public Remapper toRemapper() {
 		return new Remapper() {
@@ -49,5 +50,35 @@ public class Mapping<SRC extends Namespace, DST extends Namespace> {
 				return methodMapper.to(new EntryTriple(FROM_INTERNAL_NAME.to(owner), name, descriptor)).getName();
 			}
 		};
+	}
+	
+	public static class Builder<SRC extends Namespace, DST extends Namespace> {
+		public Builder() {}
+		
+		private Bijection<String, String> classMapper;
+		private Bijection<EntryTriple, EntryTriple> methodMapper;
+		private Bijection<EntryTriple, EntryTriple> fieldMapper;
+		
+		public Builder<SRC, DST> classes(Bijection<String, String> classMapper) {
+			this.classMapper = classMapper;
+			return this;
+		}
+		
+		public Builder<SRC, DST> methods(Bijection<EntryTriple, EntryTriple> methodMapper) {
+			this.methodMapper = methodMapper;
+			return this;
+		}
+		
+		public Builder<SRC, DST> fields(Bijection<EntryTriple, EntryTriple> fieldMapper) {
+			this.fieldMapper = fieldMapper;
+			return this;
+		}
+		
+		public Mapping<SRC, DST> build() {
+			Preconditions.checkNotNull(classMapper, "no class mappings");
+			Preconditions.checkNotNull(methodMapper, "no method mappings");
+			Preconditions.checkNotNull(fieldMapper, "no field mappings");
+			return new Mapping<>(classMapper, methodMapper, fieldMapper);
+		}
 	}
 }

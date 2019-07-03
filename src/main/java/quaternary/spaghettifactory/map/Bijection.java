@@ -1,5 +1,6 @@
 package quaternary.spaghettifactory.map;
 
+import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 
 import java.util.function.Function;

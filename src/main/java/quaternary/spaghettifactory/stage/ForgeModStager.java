@@ -1,18 +1,20 @@
-package quaternary.spaghettifactory;
+package quaternary.spaghettifactory.stage;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.jimfs.Configuration;
 import com.google.common.jimfs.Feature;
 import com.google.common.jimfs.Jimfs;
 import com.google.common.jimfs.PathType;
+import net.fabricmc.loader.discovery.ModResolutionException;
+import net.fabricmc.loader.metadata.LoaderModMetadata;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.commons.Remapper;
 import org.objectweb.asm.tree.ClassNode;
 import quaternary.spaghettifactory.map.Mappings;
 
 import java.io.IOException;
+import java.io.StringReader;
 import java.net.URI;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
@@ -20,9 +22,9 @@ import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.stream.Collectors;
 
 /**
  * Moves a forge mod into a jimfs filesystem.
@@ -37,7 +39,8 @@ public class ForgeModStager {
 			.build()
 	);
 	
-	public static Path stageMod(FileSystem jarFs, Path srcJarPath) throws IOException {
+	public static StagedForgeMod stageMod(FileSystem jarFs, Path srcJarPath) throws IOException, ModResolutionException {
+		//step one: copy the forge mod jar into jimfs
 		Path destJarPath = FORGE_FS.getPath(srcJarPath.getFileName().toString().concat("-spaghettifactory.jar"));
 		
 		//adding a jar: scheme because the original destjarpath has a jimfs: scheme
@@ -61,10 +64,10 @@ public class ForgeModStager {
 						reader.accept(remapper, 0);
 						
 						byte[] classs = writer.toByteArray();
-						/*
+						
 						ClassReader lol = new ClassReader(classs);
 						ClassNode ha = new ClassNode();
-						lol.accept(ha, 0);*/
+						lol.accept(ha, 0);
 						
 						Files.write(destPath, classs, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
 					} else {
@@ -76,6 +79,17 @@ public class ForgeModStager {
 			});
 		}
 		
-		return destJarPath;
+		//step two: generate a loadermodmetadata for this file
+		//TODO is it better to literally just add a json file to the jar and let fabric handle it?
+		LoaderModMetadata meta;
+		
+		try {
+			Path modsToml = jarFs.getPath("META-INF", "mods.toml");
+			meta = ForgeModMetadataParser.parseForgeMetadata(new StringReader(Files.lines(modsToml).collect(Collectors.joining("\n"))));
+		} catch(Exception e) {
+			throw new ModResolutionException("Cannot parse Forge mods.toml!");
+		}
+		
+		return new StagedForgeMod(destJarPath, meta);
 	}
 }

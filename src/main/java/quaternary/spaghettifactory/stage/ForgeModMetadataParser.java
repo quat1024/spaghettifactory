@@ -1,12 +1,9 @@
-package quaternary.spaghettifactory;
+package quaternary.spaghettifactory.stage;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.gson.JsonElement;
 import com.moandjiezana.toml.Toml;
-import com.sun.istack.internal.Nullable;
 import net.fabricmc.api.EnvType;
-import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.Version;
 import net.fabricmc.loader.api.metadata.ContactInformation;
 import net.fabricmc.loader.api.metadata.ModDependency;
@@ -17,7 +14,7 @@ import net.fabricmc.loader.metadata.NestedJarEntry;
 import net.minecraft.util.SystemUtil;
 import quaternary.spaghettifactory.Util;
 
-import java.io.InputStream;
+import java.io.Reader;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -31,11 +28,11 @@ import java.util.stream.Collectors;
  * Attempts to parse a Forge mods.toml file into something resembling a standard Fabric metadata object.
  */
 public class ForgeModMetadataParser {
-	public static LoaderModMetadata[] getForgeMods(FabricLoader loader, InputStream in) {
+	public static LoaderModMetadata parseForgeMetadata(Reader in) {
 		Toml toml = new Toml().read(in);
 		
 		//global stuff
-		String issueUrl = "https://github.com/quat1024/spaghettifactory/issues"; //;)
+		String issueUrl = "https://github.com/quat1024/spaghettifactory/issues"; // ;)
 		
 		//mods table
 		if(Optional.ofNullable(toml.getTables("mods")).orElse(Collections.emptyList()).size() != 1) {
@@ -98,7 +95,7 @@ public class ForgeModMetadataParser {
 			description2 = "Forge mod: " + description;
 		}
 		
-		return new LoaderModMetadata[]{ new LoaderModMetadata() {
+		return new LoaderModMetadata() {
 			@Override
 			public int getSchemaVersion() {
 				return 1;
@@ -228,6 +225,6 @@ public class ForgeModMetadataParser {
 			public JsonElement getCustomElement(String key) {
 				return null;
 			}
-		}};
+		};
 	}
 }
