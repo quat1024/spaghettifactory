@@ -5,43 +5,24 @@ import com.google.common.jimfs.Configuration;
 import com.google.common.jimfs.Feature;
 import com.google.common.jimfs.Jimfs;
 import com.google.common.jimfs.PathType;
-import com.sun.javafx.scene.shape.PathUtils;
-import com.sun.nio.zipfs.ZipFileSystem;
-import com.sun.nio.zipfs.ZipFileSystemProvider;
-import it.unimi.dsi.fastutil.io.FastBufferedInputStream;
-import net.fabricmc.loader.util.FileSystemUtil;
-import net.fabricmc.loader.util.UrlConversionException;
-import net.fabricmc.loader.util.UrlUtil;
-import org.apache.commons.io.FileUtils;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.commons.Remapper;
+import org.objectweb.asm.tree.ClassNode;
+import quaternary.spaghettifactory.map.Mappings;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.URI;
-import java.net.URL;
-import java.nio.file.CopyOption;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
-import java.nio.file.FileVisitOption;
 import java.nio.file.FileVisitResult;
-import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
-import java.util.jar.JarInputStream;
-import java.util.jar.JarOutputStream;
-import java.util.jar.Manifest;
-import java.util.zip.ZipFile;
 
 /**
  * Moves a forge mod into a jimfs filesystem.
@@ -56,30 +37,44 @@ public class ForgeModStager {
 			.build()
 	);
 	
-	public static Path stageMod(FileSystem diskFs, Path srcJarPath) throws IOException {
+	public static Path stageMod(FileSystem jarFs, Path srcJarPath) throws IOException {
 		Path destJarPath = FORGE_FS.getPath(srcJarPath.getFileName().toString().concat("-spaghettifactory.jar"));
 		
 		//adding a jar: scheme because the original destjarpath has a jimfs: scheme
-		FileSystem destZipFs = FileSystems.newFileSystem(URI.create("jar:" + destJarPath.toUri()), ImmutableMap.of("create", "true"), null);
-		
-		Files.walkFileTree(diskFs.getRootDirectories().iterator().next(), new SimpleFileVisitor<Path>() {
-			@Override
-			public FileVisitResult visitFile(Path srcPath, BasicFileAttributes attrs) throws IOException {
-				Path destPath = destZipFs.getPath(srcPath.toString());
-				
-				//TODO stuff:
-				//* more sophisticated class file processing (duh)
-				//* copying assets/ and data/ directories in one unit (preVisitDirectory)
-				//* more pandoras box opening
-				
-				Files.createDirectories(destPath);
-				Files.copy(srcPath, destPath, StandardCopyOption.REPLACE_EXISTING);
-				
-				return FileVisitResult.CONTINUE;
-			}
-		});
-		
-		destZipFs.close();
+		try(FileSystem destZipFs = FileSystems.newFileSystem(URI.create("jar:" + destJarPath.toUri()), ImmutableMap.of("create", "true"), null)) {
+			
+			Files.walkFileTree(jarFs.getRootDirectories().iterator().next(), new SimpleFileVisitor<Path>() {
+				@Override
+				public FileVisitResult visitFile(Path srcPath, BasicFileAttributes attrs) throws IOException {
+					Path destPath = destZipFs.getPath(srcPath.toString());
+					Files.createDirectories(destPath.getParent());
+					
+					//TODO stuff:
+					//* more sophisticated class file processing (duh)
+					//* copying assets/ and data/ directories in one unit (preVisitDirectory)
+					//* more pandoras box opening
+					if(srcPath.getFileName().toString().endsWith(".class")) {
+						ClassReader reader = new ClassReader(Files.readAllBytes(srcPath));
+						ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+						
+						ClassVisitor remapper = Mappings.getRemapper(writer);
+						reader.accept(remapper, 0);
+						
+						byte[] classs = writer.toByteArray();
+						/*
+						ClassReader lol = new ClassReader(classs);
+						ClassNode ha = new ClassNode();
+						lol.accept(ha, 0);*/
+						
+						Files.write(destPath, classs, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+					} else {
+						Files.copy(srcPath, destPath);
+					}
+					
+					return FileVisitResult.CONTINUE;
+				}
+			});
+		}
 		
 		return destJarPath;
 	}
