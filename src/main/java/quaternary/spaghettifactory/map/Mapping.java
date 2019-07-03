@@ -36,17 +36,17 @@ public class Mapping<SRC extends Namespace, DST extends Namespace> {
 		return new Remapper() {
 			@Override
 			public String map(String internalName) {
-				return FROM_INTERNAL_NAME.map(internalName, classMapper::apply);
+				return FROM_INTERNAL_NAME.rmap(internalName, classMapper::to);
 			}
 			
 			@Override
 			public String mapFieldName(String owner, String name, String descriptor) {
-				return fieldMapper.apply(new EntryTriple(FROM_INTERNAL_NAME.apply(owner), name, descriptor)).getName();
+				return fieldMapper.to(new EntryTriple(FROM_INTERNAL_NAME.to(owner), name, descriptor)).getName();
 			}
 			
 			@Override
 			public String mapMethodName(String owner, String name, String descriptor) {
-				return methodMapper.apply(new EntryTriple(FROM_INTERNAL_NAME.apply(owner), name, descriptor)).getName();
+				return methodMapper.to(new EntryTriple(FROM_INTERNAL_NAME.to(owner), name, descriptor)).getName();
 			}
 		};
 	}
